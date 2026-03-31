@@ -534,6 +534,20 @@ func authAttribute(auth *coreauth.Auth, key string) string {
 	return auth.Attributes[key]
 }
 
+func pickString(values map[string]any, keys ...string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	for _, key := range keys {
+		if raw, ok := values[key].(string); ok {
+			if trimmed := strings.TrimSpace(raw); trimmed != "" {
+				return trimmed
+			}
+		}
+	}
+	return ""
+}
+
 func isRuntimeOnlyAuth(auth *coreauth.Auth) bool {
 	if auth == nil || len(auth.Attributes) == 0 {
 		return false
@@ -797,6 +811,10 @@ func (h *Handler) writeAuthFile(ctx context.Context, name string, data []byte) e
 			dst = abs
 		}
 	}
+	normalizedData, _, _, errNormalize := codex.NormalizeAuthJSON(data)
+	if errNormalize == nil {
+		data = normalizedData
+	}
 	auth, err := h.buildAuthFromFileData(dst, data)
 	if err != nil {
 		return err
@@ -991,8 +1009,14 @@ func (h *Handler) buildAuthFromFileData(path string, data []byte) (*coreauth.Aut
 			return nil, fmt.Errorf("failed to read auth file: %w", err)
 		}
 	}
+	normalizedData, normalizedMetadata, _, errNormalize := codex.NormalizeAuthJSON(data)
+	if errNormalize == nil {
+		data = normalizedData
+	}
 	metadata := make(map[string]any)
-	if err := json.Unmarshal(data, &metadata); err != nil {
+	if normalizedMetadata != nil {
+		metadata = normalizedMetadata
+	} else if err := json.Unmarshal(data, &metadata); err != nil {
 		return nil, fmt.Errorf("invalid auth file: %w", err)
 	}
 	provider, _ := metadata["type"].(string)
@@ -1012,6 +1036,11 @@ func (h *Handler) buildAuthFromFileData(path string, data []byte) (*coreauth.Aut
 	attr := map[string]string{
 		"path":   path,
 		"source": path,
+	}
+	if strings.EqualFold(provider, "codex") {
+		if planType := strings.TrimSpace(pickString(metadata, "plan_type", "chatgpt_plan_type")); planType != "" {
+			attr["plan_type"] = planType
+		}
 	}
 	auth := &coreauth.Auth{
 		ID:         authID,

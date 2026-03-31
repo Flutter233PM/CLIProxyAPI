@@ -140,20 +140,31 @@ func (o *CodexAuth) ExchangeCodeForTokensWithRedirect(ctx context.Context, code,
 	}
 
 	accountID := ""
+	chatgptUserID := ""
+	planType := ""
 	email := ""
 	if claims != nil {
 		accountID = claims.GetAccountID()
+		chatgptUserID = claims.GetChatgptUserID()
+		planType = claims.GetPlanType()
 		email = claims.GetUserEmail()
 	}
 
 	// Create token data
 	tokenData := CodexTokenData{
-		IDToken:      tokenResp.IDToken,
-		AccessToken:  tokenResp.AccessToken,
-		RefreshToken: tokenResp.RefreshToken,
-		AccountID:    accountID,
-		Email:        email,
-		Expire:       time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second).Format(time.RFC3339),
+		IDToken:           tokenResp.IDToken,
+		AccessToken:       tokenResp.AccessToken,
+		RefreshToken:      tokenResp.RefreshToken,
+		AccountID:         accountID,
+		ChatgptAccountID:  accountID,
+		ChatgptUserID:     chatgptUserID,
+		PlanType:          planType,
+		Email:             email,
+		Expire:            time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second).Format(time.RFC3339),
+	}
+	tokenDataMetadata := EnrichTokenData(&tokenData, nil)
+	if v, ok := tokenDataMetadata["session_token"].(string); ok {
+		tokenData.SessionToken = strings.TrimSpace(v)
 	}
 
 	// Create auth bundle
@@ -224,33 +235,50 @@ func (o *CodexAuth) RefreshTokens(ctx context.Context, refreshToken string) (*Co
 	}
 
 	accountID := ""
+	chatgptUserID := ""
+	planType := ""
 	email := ""
 	if claims != nil {
 		accountID = claims.GetAccountID()
+		chatgptUserID = claims.GetChatgptUserID()
+		planType = claims.GetPlanType()
 		email = claims.Email
 	}
 
-	return &CodexTokenData{
-		IDToken:      tokenResp.IDToken,
-		AccessToken:  tokenResp.AccessToken,
-		RefreshToken: tokenResp.RefreshToken,
-		AccountID:    accountID,
-		Email:        email,
-		Expire:       time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second).Format(time.RFC3339),
-	}, nil
+	tokenData := &CodexTokenData{
+		IDToken:          tokenResp.IDToken,
+		AccessToken:      tokenResp.AccessToken,
+		RefreshToken:     tokenResp.RefreshToken,
+		AccountID:        accountID,
+		ChatgptAccountID: accountID,
+		ChatgptUserID:    chatgptUserID,
+		PlanType:         planType,
+		Email:            email,
+		Expire:           time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second).Format(time.RFC3339),
+	}
+	EnrichTokenData(tokenData, nil)
+	return tokenData, nil
 }
 
 // CreateTokenStorage creates a new CodexTokenStorage from a CodexAuthBundle.
 // It populates the storage struct with token data, user information, and timestamps.
 func (o *CodexAuth) CreateTokenStorage(bundle *CodexAuthBundle) *CodexTokenStorage {
+	if bundle == nil {
+		return nil
+	}
+	EnrichTokenData(&bundle.TokenData, nil)
 	storage := &CodexTokenStorage{
-		IDToken:      bundle.TokenData.IDToken,
-		AccessToken:  bundle.TokenData.AccessToken,
-		RefreshToken: bundle.TokenData.RefreshToken,
-		AccountID:    bundle.TokenData.AccountID,
-		LastRefresh:  bundle.LastRefresh,
-		Email:        bundle.TokenData.Email,
-		Expire:       bundle.TokenData.Expire,
+		IDToken:           bundle.TokenData.IDToken,
+		AccessToken:       bundle.TokenData.AccessToken,
+		RefreshToken:      bundle.TokenData.RefreshToken,
+		AccountID:         bundle.TokenData.AccountID,
+		ChatgptAccountID:  bundle.TokenData.ChatgptAccountID,
+		ChatgptUserID:     bundle.TokenData.ChatgptUserID,
+		PlanType:          bundle.TokenData.PlanType,
+		SessionToken:      bundle.TokenData.SessionToken,
+		LastRefresh:       bundle.LastRefresh,
+		Email:             bundle.TokenData.Email,
+		Expire:            bundle.TokenData.Expire,
 	}
 
 	return storage
@@ -299,10 +327,18 @@ func isNonRetryableRefreshErr(err error) bool {
 // UpdateTokenStorage updates an existing CodexTokenStorage with new token data.
 // This is typically called after a successful token refresh to persist the new credentials.
 func (o *CodexAuth) UpdateTokenStorage(storage *CodexTokenStorage, tokenData *CodexTokenData) {
+	if storage == nil || tokenData == nil {
+		return
+	}
+	EnrichTokenData(tokenData, nil)
 	storage.IDToken = tokenData.IDToken
 	storage.AccessToken = tokenData.AccessToken
 	storage.RefreshToken = tokenData.RefreshToken
 	storage.AccountID = tokenData.AccountID
+	storage.ChatgptAccountID = tokenData.ChatgptAccountID
+	storage.ChatgptUserID = tokenData.ChatgptUserID
+	storage.PlanType = tokenData.PlanType
+	storage.SessionToken = tokenData.SessionToken
 	storage.LastRefresh = time.Now().Format(time.RFC3339)
 	storage.Email = tokenData.Email
 	storage.Expire = tokenData.Expire

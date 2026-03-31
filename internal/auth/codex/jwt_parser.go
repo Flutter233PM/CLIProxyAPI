@@ -100,3 +100,13 @@ func (c *JWTClaims) GetUserEmail() string {
 func (c *JWTClaims) GetAccountID() string {
 	return c.CodexAuthInfo.ChatgptAccountID
 }
+
+// GetChatgptUserID extracts the ChatGPT user identifier from the JWT claims.
+func (c *JWTClaims) GetChatgptUserID() string {
+	return c.CodexAuthInfo.ChatgptUserID
+}
+
+// GetPlanType extracts the ChatGPT plan type from the JWT claims.
+func (c *JWTClaims) GetPlanType() string {
+	return c.CodexAuthInfo.ChatgptPlanType
+}

@@ -272,9 +272,19 @@ func (a *CodexAuthenticator) buildAuthRecord(authSvc *codex.CodexAuth, authBundl
 	}
 
 	fileName := codex.CredentialFileName(tokenStorage.Email, planType, hashAccountID, true)
-	metadata := map[string]any{
-		"email": tokenStorage.Email,
-	}
+	metadata := codex.EnrichTokenData(nil, map[string]any{
+		"email":               tokenStorage.Email,
+		"account_id":          tokenStorage.AccountID,
+		"chatgpt_account_id":  tokenStorage.ChatgptAccountID,
+		"chatgpt_user_id":     tokenStorage.ChatgptUserID,
+		"plan_type":           tokenStorage.PlanType,
+		"chatgpt_plan_type":   tokenStorage.PlanType,
+		"session_token":       tokenStorage.SessionToken,
+		"id_token":            tokenStorage.IDToken,
+		"access_token":        tokenStorage.AccessToken,
+		"refresh_token":       tokenStorage.RefreshToken,
+		"expired":             tokenStorage.Expire,
+	})
 
 	fmt.Println("Codex authentication successful")
 	if authBundle.APIKey != "" {

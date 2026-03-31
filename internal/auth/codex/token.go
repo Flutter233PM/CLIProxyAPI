@@ -24,6 +24,14 @@ type CodexTokenStorage struct {
 	RefreshToken string `json:"refresh_token"`
 	// AccountID is the OpenAI account identifier associated with this token.
 	AccountID string `json:"account_id"`
+	// ChatgptAccountID mirrors AccountID for older CPA compatibility readers.
+	ChatgptAccountID string `json:"chatgpt_account_id"`
+	// ChatgptUserID stores the ChatGPT user identifier used by compatibility shims.
+	ChatgptUserID string `json:"chatgpt_user_id"`
+	// PlanType stores the ChatGPT plan type for quota parsing compatibility.
+	PlanType string `json:"plan_type"`
+	// SessionToken preserves session-fast-path session tokens in persisted auth files.
+	SessionToken string `json:"session_token"`
 	// LastRefresh is the timestamp of the last token refresh operation.
 	LastRefresh string `json:"last_refresh"`
 	// Email is the OpenAI account email address associated with this token.
@@ -73,6 +81,7 @@ func (ts *CodexTokenStorage) SaveTokenToFile(authFilePath string) error {
 	if errMerge != nil {
 		return fmt.Errorf("failed to merge metadata: %w", errMerge)
 	}
+	data, _ = NormalizeAuthMetadata(data)
 
 	if err = json.NewEncoder(f).Encode(data); err != nil {
 		return fmt.Errorf("failed to write token to file: %w", err)

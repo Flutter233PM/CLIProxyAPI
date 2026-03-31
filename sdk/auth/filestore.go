@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/router-for-me/CLIProxyAPI/v6/internal/auth/codex"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
 )
 
@@ -83,6 +84,12 @@ func (s *FileTokenStore) Save(ctx context.Context, auth *cliproxyauth.Auth) (str
 		raw, errMarshal := json.Marshal(auth.Metadata)
 		if errMarshal != nil {
 			return "", fmt.Errorf("auth filestore: marshal metadata failed: %w", errMarshal)
+		}
+		if normalizedRaw, normalizedMetadata, _, errNormalize := codex.NormalizeAuthJSON(raw); errNormalize == nil {
+			raw = normalizedRaw
+			if normalizedMetadata != nil {
+				auth.Metadata = normalizedMetadata
+			}
 		}
 		if existing, errRead := os.ReadFile(path); errRead == nil {
 			if jsonEqual(existing, raw) {
@@ -189,8 +196,22 @@ func (s *FileTokenStore) readAuthFile(path, baseDir string) (*cliproxyauth.Auth,
 	if len(data) == 0 {
 		return nil, nil
 	}
+
+	normalizedData, normalizedMetadata, changed, errNormalize := codex.NormalizeAuthJSON(data)
+	if errNormalize == nil {
+		data = normalizedData
+		if changed {
+			if file, errOpen := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0o600); errOpen == nil {
+				_, _ = file.Write(normalizedData)
+				_ = file.Close()
+			}
+		}
+	}
+
 	metadata := make(map[string]any)
-	if err = json.Unmarshal(data, &metadata); err != nil {
+	if normalizedMetadata != nil {
+		metadata = normalizedMetadata
+	} else if err = json.Unmarshal(data, &metadata); err != nil {
 		return nil, fmt.Errorf("unmarshal auth json: %w", err)
 	}
 	provider, _ := metadata["type"].(string)
@@ -237,6 +258,15 @@ func (s *FileTokenStore) readAuthFile(path, baseDir string) (*cliproxyauth.Auth,
 	if disabled {
 		status = cliproxyauth.StatusDisabled
 	}
+	attributes := map[string]string{"path": path}
+	if email, ok := metadata["email"].(string); ok && email != "" {
+		attributes["email"] = email
+	}
+	if strings.EqualFold(provider, "codex") {
+		if planType, ok := metadata["plan_type"].(string); ok && strings.TrimSpace(planType) != "" {
+			attributes["plan_type"] = strings.TrimSpace(planType)
+		}
+	}
 	auth := &cliproxyauth.Auth{
 		ID:               id,
 		Provider:         provider,
@@ -244,18 +274,16 @@ func (s *FileTokenStore) readAuthFile(path, baseDir string) (*cliproxyauth.Auth,
 		Label:            s.labelFor(metadata),
 		Status:           status,
 		Disabled:         disabled,
-		Attributes:       map[string]string{"path": path},
+		Attributes:       attributes,
 		Metadata:         metadata,
 		CreatedAt:        info.ModTime(),
 		UpdatedAt:        info.ModTime(),
 		LastRefreshedAt:  time.Time{},
 		NextRefreshAfter: time.Time{},
 	}
-	if email, ok := metadata["email"].(string); ok && email != "" {
-		auth.Attributes["email"] = email
-	}
 	return auth, nil
 }
+
 
 func (s *FileTokenStore) idFor(path, baseDir string) string {
 	id := path

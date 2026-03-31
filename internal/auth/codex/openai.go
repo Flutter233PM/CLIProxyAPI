@@ -21,6 +21,14 @@ type CodexTokenData struct {
 	RefreshToken string `json:"refresh_token"`
 	// AccountID is the OpenAI account identifier
 	AccountID string `json:"account_id"`
+	// ChatgptAccountID is the ChatGPT account identifier older CPA builds read directly.
+	ChatgptAccountID string `json:"chatgpt_account_id"`
+	// ChatgptUserID is the ChatGPT user identifier used by compatibility shims.
+	ChatgptUserID string `json:"chatgpt_user_id"`
+	// PlanType is the ChatGPT plan type used by quota parsing and file naming.
+	PlanType string `json:"plan_type"`
+	// SessionToken preserves session-fast-path tokens for downstream compatibility.
+	SessionToken string `json:"session_token"`
 	// Email is the OpenAI account email
 	Email string `json:"email"`
 	// Expire is the timestamp of the token expire

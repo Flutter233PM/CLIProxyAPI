@@ -73,8 +73,31 @@ func TestUploadAuthFile_BatchMultipart(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected uploaded file %s to exist: %v", file.name, err)
 		}
-		if string(data) != file.content {
-			t.Fatalf("expected file %s content %q, got %q", file.name, file.content, string(data))
+
+		var stored map[string]any
+		if err := json.Unmarshal(data, &stored); err != nil {
+			t.Fatalf("expected uploaded file %s to contain valid json: %v", file.name, err)
+		}
+		if got, _ := stored["type"].(string); got != map[string]string{"alpha.json": "codex", "beta.json": "claude"}[file.name] {
+			t.Fatalf("expected file %s type %q, got %q", file.name, map[string]string{"alpha.json": "codex", "beta.json": "claude"}[file.name], got)
+		}
+		if got, _ := stored["email"].(string); got != map[string]string{"alpha.json": "alpha@example.com", "beta.json": "beta@example.com"}[file.name] {
+			t.Fatalf("expected file %s email %q, got %q", file.name, map[string]string{"alpha.json": "alpha@example.com", "beta.json": "beta@example.com"}[file.name], got)
+		}
+		if file.name == "alpha.json" {
+			idToken, _ := stored["id_token"].(string)
+			if idToken == "" {
+				t.Fatalf("expected codex upload to synthesize id_token")
+			}
+			credentials, ok := stored["credentials"].(map[string]any)
+			if !ok {
+				t.Fatalf("expected codex upload to backfill credentials map, got %#v", stored["credentials"])
+			}
+			if got, _ := credentials["id_token"].(string); got == "" {
+				t.Fatalf("expected codex credentials.id_token to be backfilled")
+			}
+		} else if string(data) != file.content {
+			t.Fatalf("expected non-codex file %s content %q, got %q", file.name, file.content, string(data))
 		}
 	}
 

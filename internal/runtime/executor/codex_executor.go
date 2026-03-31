@@ -582,17 +582,7 @@ func (e *CodexExecutor) Refresh(ctx context.Context, auth *cliproxyauth.Auth) (*
 	if auth.Metadata == nil {
 		auth.Metadata = make(map[string]any)
 	}
-	auth.Metadata["id_token"] = td.IDToken
-	auth.Metadata["access_token"] = td.AccessToken
-	if td.RefreshToken != "" {
-		auth.Metadata["refresh_token"] = td.RefreshToken
-	}
-	if td.AccountID != "" {
-		auth.Metadata["account_id"] = td.AccountID
-	}
-	auth.Metadata["email"] = td.Email
-	// Use unified key in files
-	auth.Metadata["expired"] = td.Expire
+	auth.Metadata = codexauth.EnrichTokenData(td, auth.Metadata)
 	auth.Metadata["type"] = "codex"
 	now := time.Now().Format(time.RFC3339)
 	auth.Metadata["last_refresh"] = now
